@@ -14,12 +14,27 @@
 #define TAB_X 5
 #define TAB_Y 7
 
+// Armazena os dados do cursor de seleção de peça
+typedef struct cursor_data {
+    int x;
+    int y;
+    char player;
+} cursor_data;
+
+// Inicializa a variável
+cursor_data cursor = {2, 2, 'o'};;
+
 // Legenda: c = cachorro, o = onça, f = posição inválida, n = posição livre
 std::vector<std::vector<char>> tabuleiro = {{'c', 'c', 'c', 'n', 'n', 'f', 'n',},
-                                            {'c', 'c', 'c', 'n', 'n', 'n', 'n',},
+                                            {'c', 'c', 'c', 'n', 'n', 'n', 'f',},
                                             {'c', 'c', 'o', 'n', 'n', 'n', 'n',},
-                                            {'c', 'c', 'c', 'n', 'n', 'n', 'n',},
+                                            {'c', 'c', 'c', 'n', 'n', 'n', 'f',},
                                             {'c', 'c', 'c', 'n', 'n', 'f', 'n',}};
+
+void mover_peca(int x1, int y1, int x2, int y2) {
+    tabuleiro[x2][y2] = tabuleiro[x1][y1];
+    tabuleiro[x1][y1] = 'n';
+}
 
 // Função adaptada do programa demonstrativo 'Worms'
 void drawCircle(float x0, float y0, float radius, char player) {
@@ -167,15 +182,6 @@ void Atualiza_desenho(void){
 	glFlush();
 }
 
-void Teclado( unsigned char tecla, int x, int y){
-    switch (tecla){
-        case 27 :
-        case 'q':
-            exit(0);
-        break;
-    }
-}
-
 // Trecho de funções do jogo
 bool par(int num) {
     return !(num & 1);
@@ -187,15 +193,120 @@ bool movimenta(int x1, int y1, int x2, int y2) {
        O restante se movimenta somente na vertical ou horizontal,
         sem diagonal (pecas restritias)
     */
-    if( /* Verifica se a peca é restrita */
-        (!par(i) && par(j)) || (par(i) && !par(j))
+    /* Movimentação para posição que não existe */
+    if(tabuleiro[x2][y2] == 'f')
+        return false;
+    /* Movimentação das peças da toca */
+    if(y1 > 4 && (x1 != 2 && y1 != 5)) {
+        // Peças na parte inferior da toca
+        if(x1 == 3 && y1 == 5 && (
+            (x2 == 3 && y2 == 4) ||
+            (x2 == 4 && y2 == 4) ||
+            (x2 == 4 && y2 == 5) ||
+            (x2 == 2 && y2 == 6)
+           ))
+           return false;
+        if(x1 == 1 && y1 == 5 && (
+            (x2 == 1 && y2 == 4) ||
+            (x2 == 0 && y2 == 4) ||
+            (x2 == 0 && y2 == 5) ||
+            (x2 == 2 && y2 == 6)
+           ))
+           return false;
+        if(x1 == 0 && y1 == 6 && (
+            (x2 != 1 && y2 != 5) &&
+            (x2 != 2 && y2 != 6)
+           ))
+           return false;
+        if(x1 == 4 && y1 == 6 && (
+            (x2 != 3 && y2 != 5) &&
+            (x2 != 2 && y2 != 6)
+           ))
+           return false;
+        if(x1 == 2 && y1 == 6 && (
+            (x2 != 0 && y2 != 6) &&
+            (x2 != 4 && y2 != 6) &&
+            (x2 != 2 && y2 != 5)
+           ))
+            return false;
+    }
+    else if( /* Verifica se a peca é restrita */
+        (!par(x1) && par(y1)) || (par(x1) && !par(y1))
         /* Verifica se o movimento é diagonal */
         && !((x2 == x1 && y2 != y1) || (x2 != x1 && y2 == y1))
       )
         /* Movimento invalido: peça restrita tentou andar diagonalmente */
         return false;
     /* Verifica se a posição está livre */
-    if()
+    if(tabuleiro[x2][y2] != 'n')
+        return false;
+
+    return true;
+}
+
+bool mover_cursor(int cur_x, int cur_y, int next_x, int next_y) {
+    // Verifica se o movimento não é para fora do tabuleiro
+    if(next_x < 0 || next_y < 0 || next_x > TAB_X || next_y > TAB_Y)
+        return false;
+    // Movimenta corretamente a localização [2][6]
+    if(cur_x == 2 && cur_y == 6) {
+        if(next_x < cur_x)
+            next_x -= 1;
+        else if(next_x > cur_x)
+            next_x += 1;
+    }
+    return movimenta(cur_x, cur_y, next_x, next_y);
+}
+
+void Teclado( unsigned char tecla, int x, int y){
+    bool saida_movimento;
+    int next_x,
+        next_y;
+    switch (tecla){
+        case 27 :
+        case 'q':
+            exit(0);
+        break;
+        case '1':
+            next_x = cursor.x + 1;
+            next_y = cursor.y - 1;
+            break;
+        case '2':
+            next_x = cursor.x + 1;
+            next_y = cursor.y;
+            break;
+        case '3':
+            next_x = cursor.x + 1;
+            next_y = cursor.y + 1;
+            break;
+        case '4':
+            next_x = cursor.x;
+            next_y = cursor.y - 1;
+            break;
+        case '6':
+            next_x = cursor.x;
+            next_y = cursor.y + 1;
+            break;
+        case '7':
+            next_x = cursor.x - 1;
+            next_y = cursor.y - 1;
+            break;
+        case '8':
+            next_x = cursor.x - 1;
+            next_y = cursor.y;
+            break;
+        case '9':
+            next_x = cursor.x - 1;
+            next_y = cursor.y + 1;
+            break;
+    }
+    saida_movimento = mover_cursor(cursor.x, cursor.y, next_x, next_y);
+    if(tecla >= '1' && tecla <= '9' && tecla != '5' && saida_movimento)
+        mover_peca(cursor.x, cursor.y, next_x, next_y);
+    glutPostRedisplay();
+}
+
+void menu() {
 
 }
 
@@ -210,5 +321,6 @@ int main(int argc, char *argv[]){
 	glutKeyboardFunc (Teclado);
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glutMainLoop();
+
     return 0;
 }
