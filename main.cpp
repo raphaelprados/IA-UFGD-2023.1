@@ -2,6 +2,7 @@
 // Bibliotecas de sistema
 #include <stdlib.h>
 #include <stdio.h>
+#include <iostream>
 // Bibliotecas gráficas
 #include <GL/glut.h>
 // Blibliotecas adicionais
@@ -11,6 +12,7 @@
 // Variaveis de controle
 #define CIRCLE_POINTS 25
 #define CIRCLE_RADIUS 3.0f
+#define CURSOR_RADIUS 4.5f
 #define TAB_X 5
 #define TAB_Y 7
 
@@ -19,17 +21,51 @@ typedef struct cursor_data {
     int x;
     int y;
     char player;
+    int next_x;
+    int next_y;
+    bool holding;
 } cursor_data;
 
 // Inicializa a variável
-cursor_data cursor = {2, 2, 'o'};;
+cursor_data cursor = {2, 2, 'o', 2, 2, false};
+
+// Variável de controle dos parametros do jogo
+typedef struct {
+    char mode;          // pvp, pvm
+    char difficulty;    // easy, medium, hard
+    bool debug_mode;    // false by default
+    char player1;
+    char player2;
+} game_data ;
+
+game_data gdt = {'n', 'n', false, 'n', 'n'};
 
 // Legenda: c = cachorro, o = onça, f = posição inválida, n = posição livre
-std::vector<std::vector<char>> tabuleiro = {{'c', 'c', 'c', 'n', 'n', 'f', 'n',},
-                                            {'c', 'c', 'c', 'n', 'n', 'n', 'f',},
-                                            {'c', 'c', 'o', 'n', 'n', 'n', 'n',},
-                                            {'c', 'c', 'c', 'n', 'n', 'n', 'f',},
-                                            {'c', 'c', 'c', 'n', 'n', 'f', 'n',}};
+typedef std::vector<std::vector<char>> Tabuleiro;
+Tabuleiro tabuleiro = {{'c', 'c', 'c', 'n', 'n', 'f', 'n',},
+                       {'c', 'c', 'c', 'n', 'n', 'n', 'f',},
+                       {'c', 'c', 'o', 'n', 'n', 'n', 'n',},
+                       {'c', 'c', 'c', 'n', 'n', 'n', 'f',},
+                       {'c', 'c', 'c', 'n', 'n', 'f', 'n',}};
+
+// Estrutura de controle de possiveis movimentos para cada peca
+typedef struct {
+    int x;
+    int y;
+    char mapping;
+} pos;
+
+// Vetor que contem todos os movimentos possiveis
+pos movimentos[9] = {{-1, -1, '7'}, {-1, -1, '8'}, {-1, -1, '9'}, {-1, -1, '4'},
+                     {-1, -1, '5'}, {-1, -1, '6'}, {-1, -1, '1'}, {-1, -1, '2'},
+                     {-1, -1, '3'}};
+
+// Estrutura da arvore de decisão
+class Node{
+private:
+
+public:
+};
 
 void mover_peca(int x1, int y1, int x2, int y2) {
     tabuleiro[x2][y2] = tabuleiro[x1][y1];
@@ -37,7 +73,7 @@ void mover_peca(int x1, int y1, int x2, int y2) {
 }
 
 // Função adaptada do programa demonstrativo 'Worms'
-void drawCircle(float x0, float y0, float radius, char player) {
+void drawCircle(float x0, float y0, float radius, char player, bool filled, bool cursor_selected) {
     int i;
     float angle;
 
@@ -54,13 +90,24 @@ void drawCircle(float x0, float y0, float radius, char player) {
         }
         inited++;
     };
-
-    if(player == 'c')
+    // Seta cores diferentes para a onca (azul) e os cachorros (verde)
+    if(cursor_selected)
+        glColor3f(0.0f, 0.0f, 0.0f);
+    else if(!filled) {
+        if(cursor.player == 'o')
+            glColor3f(0.0f, 0.0f, 1.0f);
+        else
+            glColor3f(0.0f, 1.0f, 0.0f);
+    }
+    else if(player == 'c')
         glColor3f(0.0f, 1.0f, 0.0f);
     else
         glColor3f(0.0f, 0.0f, 1.0f);
-
-    glBegin(GL_POLYGON);
+    // Imprime uma um circulo (true) ou uma circunferencia (false)
+    if (filled)
+        glBegin(GL_POLYGON);
+    else
+        glBegin(GL_LINE_LOOP);
     for(i = 0; i < CIRCLE_POINTS; i++)
         glVertex2f((radius * circlex[i]) + x0, (radius * circley[i]) + y0);
     glEnd();
@@ -165,21 +212,23 @@ void desenha_pecas() {
     for(int i = 0; i < TAB_X; i++) {
         for(int j = 0; j < TAB_Y; j++) {
             if(tabuleiro[i][j] != 'f' && tabuleiro[i][j] != 'n')
-                drawCircle(-20.0 + j*10.0, 20 - i*10.0, CIRCLE_RADIUS, tabuleiro[i][j]);
+                drawCircle(-20.0 + j*10.0, 20 - i*10.0, CIRCLE_RADIUS, tabuleiro[i][j], true,
+                           false);
         }
     }
 }
 
-void Atualiza_desenho(void){
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glClear(GL_COLOR_BUFFER_BIT);
-    glColor3f(1.0f, 0.0f, 0.0f);
-
-	desenha_tabuleiro();
-    desenha_pecas();
-
-	glFlush();
+void desenha_cursor() {
+    if(cursor.holding) {
+        for(int i = 0; i < 9; i++) {
+            if(movimentos[i].x != -1)
+                drawCircle(-20.0 + movimentos[i].y*10.0, 20 - movimentos[i].x*10.0, CURSOR_RADIUS,
+                            tabuleiro[movimentos[i].x][movimentos[i].y], false,
+                            cursor.next_x == movimentos[i].x && cursor.next_y == movimentos[i].y ? true : false );
+        }
+    }
+    drawCircle(-20.0 + cursor.y*10.0, 20 - cursor.x*10.0, CURSOR_RADIUS,
+                   tabuleiro[cursor.x][cursor.y], false, true);
 }
 
 // Trecho de funções do jogo
@@ -187,12 +236,22 @@ bool par(int num) {
     return !(num & 1);
 }
 
-bool movimenta(int x1, int y1, int x2, int y2) {
+bool validar_posicao(int x1, int y1, int x2, int y2) {
     /* Pecas localizadas em posicoes onde x1 e y1 são ambos pares
         ou impares se movem em todas as direções (pecas totais).
        O restante se movimenta somente na vertical ou horizontal,
         sem diagonal (pecas restritias)
     */
+    // Verifica se o movimento não é para fora do tabuleiro
+    if(x2 < 0 || y2 < 0 || x2 >= TAB_X || y2 >= TAB_Y)
+        return false;
+    // Movimenta corretamente a localização [2][6]
+    if(x1 == 2 && y1 == 6) {
+        if(x2 < x1)
+            x2 -= 1;
+        else if(x2 > x1)
+            x2 += 1;
+    }
     /* Movimentação para posição que não existe */
     if(tabuleiro[x2][y2] == 'f')
         return false;
@@ -231,35 +290,120 @@ bool movimenta(int x1, int y1, int x2, int y2) {
             return false;
     }
     else if( /* Verifica se a peca é restrita */
-        (!par(x1) && par(y1)) || (par(x1) && !par(y1))
+        ((!par(x1) && par(y1)) || (par(x1) && !par(y1)))
         /* Verifica se o movimento é diagonal */
-        && !((x2 == x1 && y2 != y1) || (x2 != x1 && y2 == y1))
-      )
+        && (x2 != x1 && y2 != y1)
+        ) {
         /* Movimento invalido: peça restrita tentou andar diagonalmente */
         return false;
+    }
     /* Verifica se a posição está livre */
     if(tabuleiro[x2][y2] != 'n')
         return false;
+    return true;
+}
+
+void obter_movimentos() {
+    int c = 0;
+    for(int i = 0; i < 9; i++) {
+        movimentos[i] = {-1, -1, movimentos[c].mapping};
+    }
+    for(int i = cursor.x - 1; i <= cursor.x + 1; i++) {
+        for(int j = cursor.y - 1; j <= cursor.y + 1; j++) {
+            if(validar_posicao(cursor.x, cursor.y, i, j)) {
+                if(cursor.player == 'o') {
+                    if(tabuleiro[i][j] == 'n') {
+                        movimentos[c] = {i, j, movimentos[c].mapping};
+                        c++;
+                    } else if(tabuleiro[i][j] == 'c') {
+                        int jump_x = i + (i - cursor.x);
+                        int jump_y = j + (j - cursor.y);
+                        if(validar_posicao(cursor.x, cursor.y, jump_x, jump_y)
+                           && tabuleiro[jump_x][jump_y] == 'n') {
+                            movimentos[c] = {i, j, movimentos[c].mapping};
+                            c++;
+                        }
+                    }
+                } else {
+                    if(tabuleiro[i][j] == 'n') {
+                        movimentos[c] = {i, j, movimentos[c].mapping};
+                        c++;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void selecionar_pos() {
+    if(cursor.player != 'o') {
+        for(int i = 0; i < TAB_X; i++)
+            for(int j = 0; j < TAB_Y; j++)
+                if(tabuleiro[i][j] == 'c') {
+                    cursor.x = i;
+                    cursor.y = j;
+                    return;
+                }
+    } else {
+        for(int i = 0; i < TAB_X; i++)
+            for(int j = 0; j < TAB_Y; j++)
+                if(tabuleiro[i][j] == 'o') {
+                    cursor.x = i;
+                    cursor.y = j;
+                    return;
+                }
+    }
+}
+
+void atualizar_parametros() {
+    // Passa para o proximo jogador
+    cursor.player = cursor.player == 'o' ? 'c' : 'o';
+    cursor.holding = false;
+    selecionar_pos();
+}
+
+void Atualiza_desenho(void){
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColor3f(1.0f, 0.0f, 0.0f);
+
+	desenha_tabuleiro();
+    desenha_pecas();
+    desenha_cursor();
+
+	glFlush();
+}
+
+bool mover_cursor(int x1, int y1, int x2, int y2) {
+    // Verifica se esta dentro do tabuleiro
+    if(x2 < 0 || y2 < 0 || x2 >= TAB_X || y2 >= TAB_Y)
+        return false;
+    // Movimenta corretamente a localização [2][6]
+    if(x1 == 2 && y1 == 6) {
+        if(x2 < x1)
+            x2 -= 1;
+        else if(x2 > x1)
+            x2 += 1;
+    }
+    if(x1 == 0 && y1 == 4 && x2 == 0 && y2 == 5)
+        y2 = 6;
+    if(x1 == 4 && y1 == 4 && x2 == 4 && y2 == 5)
+        y2 = 6;
+
+    cursor.x = x2;
+    cursor.y = y2;
 
     return true;
 }
 
-bool mover_cursor(int cur_x, int cur_y, int next_x, int next_y) {
-    // Verifica se o movimento não é para fora do tabuleiro
-    if(next_x < 0 || next_y < 0 || next_x > TAB_X || next_y > TAB_Y)
-        return false;
-    // Movimenta corretamente a localização [2][6]
-    if(cur_x == 2 && cur_y == 6) {
-        if(next_x < cur_x)
-            next_x -= 1;
-        else if(next_x > cur_x)
-            next_x += 1;
-    }
-    return movimenta(cur_x, cur_y, next_x, next_y);
+bool mover_seletor(int next_x, int next_y) {
+    cursor.next_x = next_x;
+    cursor.next_y = next_y;
 }
 
 void Teclado( unsigned char tecla, int x, int y){
-    bool saida_movimento;
+    bool saida;
     int next_x,
         next_y;
     switch (tecla){
@@ -267,6 +411,22 @@ void Teclado( unsigned char tecla, int x, int y){
         case 'q':
             exit(0);
         break;
+        case 'w':
+            cursor.next_x = cursor.x - 1;
+            cursor.next_y = cursor.y;
+            break;
+        case 'a':
+            cursor.next_x = cursor.x;
+            cursor.next_y = cursor.y - 1;
+            break;
+        case 's':
+            cursor.next_x = cursor.x + 1;
+            cursor.next_y = cursor.y;
+            break;
+        case 'd':
+            cursor.next_x = cursor.x;
+            cursor.next_y = cursor.y + 1;
+            break;
         case '1':
             next_x = cursor.x + 1;
             next_y = cursor.y - 1;
@@ -300,17 +460,62 @@ void Teclado( unsigned char tecla, int x, int y){
             next_y = cursor.y + 1;
             break;
     }
-    saida_movimento = mover_cursor(cursor.x, cursor.y, next_x, next_y);
-    if(tecla >= '1' && tecla <= '9' && tecla != '5' && saida_movimento)
-        mover_peca(cursor.x, cursor.y, next_x, next_y);
+    if(tecla >= '1' && tecla <= '9' && tecla != '5') {
+        if(validar_posicao(cursor.x, cursor.y, next_x, next_y))
+            mover_seletor(next_x, next_y);
+    }
+    if(tecla == 'w' || tecla == 'a' || tecla == 's' || tecla == 'd') {
+        saida = mover_cursor(cursor.x, cursor.y, cursor.next_x, cursor.next_y);
+        if(gdt.debug_mode)
+            std::cout << "Mover Cursor: " << mover_cursor(cursor.x, cursor.y, next_x, next_y) << std::endl;
+    }
+    if(tecla == 'k') {
+        mover_peca(cursor.x, cursor.y, cursor.next_x, cursor.next_y);
+        atualizar_parametros();
+    }
+    if(tecla == 'h') {
+        cursor.holding = !cursor.holding;
+        obter_movimentos();
+    }
+
     glutPostRedisplay();
 }
 
 void menu() {
+    char menu_input = 'f';
+    while(gdt.mode != 'm' && gdt.mode != 'p') {
+        std::cout << "Escolha o modo de jogo: " << std::endl
+                  << "1. PVM" << std::endl
+                  << "2. PVP" << std::endl
+                  << "> ";
+        std::cin >> gdt.mode;
+        gdt.mode = (gdt.mode == '1' ? 'm' : 'p');
+        system("cls");
+    }
 
+    if(gdt.mode == 'm') {
+        while(gdt.difficulty != '1' && gdt.difficulty != '2' && gdt.difficulty != '3') {
+            std::cout << "Escolha a dificuldade do jogo: " << std::endl
+                      << "1. Easy" << std::endl
+                      << "2. Medium" << std::endl
+                      << "3. Hard" << std::endl
+                      << "> ";
+            std::cin >> gdt.difficulty;
+        }
+    }
+    while(menu_input != 'S' && menu_input != 's' && menu_input != 'n' && menu_input != 'N') {
+        std::cout << "Ativar modo debug? (S/N)" << std::endl
+              << "> ";
+        std::cin >> menu_input;
+    }
+    if(menu_input == 'S')
+        gdt.debug_mode = true;
+    system("cls");
 }
 
 int main(int argc, char *argv[]){
+	menu();
+	obter_movimentos();
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
 	glutInitWindowPosition(100,50);
