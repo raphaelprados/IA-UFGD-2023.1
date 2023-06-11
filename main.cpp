@@ -13,6 +13,7 @@
 #define CIRCLE_POINTS 25
 #define CIRCLE_RADIUS 3.0f
 #define CURSOR_RADIUS 4.5f
+#define MOVIMENTOS 9
 #define TAB_X 5
 #define TAB_Y 7
 
@@ -53,19 +54,15 @@ typedef struct {
     int x;
     int y;
     char mapping;
-} pos;
+} Positions;
 
 // Vetor que contem todos os movimentos possiveis
-pos movimentos[9] = {{-1, -1, '7'}, {-1, -1, '8'}, {-1, -1, '9'}, {-1, -1, '4'},
-                     {-1, -1, '5'}, {-1, -1, '6'}, {-1, -1, '1'}, {-1, -1, '2'},
-                     {-1, -1, '3'}};
+Positions movimentos[MOVIMENTOS] = {{-1, -1, '7'}, {-1, -1, '8'}, {-1, -1, '9'}, {-1, -1, '4'},
+                                    {-1, -1, '5'}, {-1, -1, '6'}, {-1, -1, '1'}, {-1, -1, '2'},
+                                    {-1, -1, '3'}};
 
-// Estrutura da arvore de decisão
-class Node{
-private:
-
-public:
-};
+// Estrutura temporaria para auxiliar a declaração de objetos
+Positions temp = movimentos;
 
 void mover_peca(int x1, int y1, int x2, int y2) {
     tabuleiro[x2][y2] = tabuleiro[x1][y1];
@@ -220,7 +217,7 @@ void desenha_pecas() {
 
 void desenha_cursor() {
     if(cursor.holding) {
-        for(int i = 0; i < 9; i++) {
+        for(int i = 0; i < MOVIMENTOS; i++) {
             if(movimentos[i].x != -1)
                 drawCircle(-20.0 + movimentos[i].y*10.0, 20 - movimentos[i].x*10.0, CURSOR_RADIUS,
                             tabuleiro[movimentos[i].x][movimentos[i].y], false,
@@ -303,30 +300,42 @@ bool validar_posicao(int x1, int y1, int x2, int y2) {
     return true;
 }
 
-void obter_movimentos() {
+void obter_movimentos(bool global_position) {
     int c = 0;
-    for(int i = 0; i < 9; i++) {
-        movimentos[i] = {-1, -1, movimentos[c].mapping};
+    for(int i = 0; i < MOVIMENTOS; i++) {
+        if(global_position)
+            movimentos[i] = {-1, -1, movimentos[c].mapping};
+        else
+            temp[i] = {-1, -1, movimentos[c].mapping};
     }
     for(int i = cursor.x - 1; i <= cursor.x + 1; i++) {
         for(int j = cursor.y - 1; j <= cursor.y + 1; j++) {
             if(validar_posicao(cursor.x, cursor.y, i, j)) {
                 if(cursor.player == 'o') {
                     if(tabuleiro[i][j] == 'n') {
-                        movimentos[c] = {i, j, movimentos[c].mapping};
+                        if(global_position)
+                            movimentos[c] = {i, j, movimentos[c].mapping};
+                        else
+                            temp[c] = {i, j, movimentos[c].mapping};
                         c++;
                     } else if(tabuleiro[i][j] == 'c') {
                         int jump_x = i + (i - cursor.x);
                         int jump_y = j + (j - cursor.y);
                         if(validar_posicao(cursor.x, cursor.y, jump_x, jump_y)
                            && tabuleiro[jump_x][jump_y] == 'n') {
-                            movimentos[c] = {i, j, movimentos[c].mapping};
+                            if(global_position)
+                                movimentos[c] = {i, j, movimentos[c].mapping};
+                            else
+                                temp[c] = {i, j, movimentos[c].mapping};
                             c++;
                         }
                     }
                 } else {
                     if(tabuleiro[i][j] == 'n') {
-                        movimentos[c] = {i, j, movimentos[c].mapping};
+                        if(global_position)
+                            movimentos[c] = {i, j, movimentos[c].mapping};
+                        else
+                            temp[c] = {i, j, movimentos[c].mapping};
                         c++;
                     }
                 }
@@ -402,6 +411,101 @@ bool mover_seletor(int next_x, int next_y) {
     cursor.next_y = next_y;
 }
 
+// Estrutura da arvore de decisão
+class Node{
+private:
+    Tabuleiro cur_tab;
+    int heuristica;
+    std::vector<Node> filhos;
+public:
+    Node(Tabuleiro tab, int x, int y, char player, int depth) {
+        heuristica = 0;
+        cur_tab = tab;
+        if(depth == 0)
+            calcularHeuristica(player, x, y);
+        // Ultimo nivel de pesquisa alcançado
+        if(depth != 0) {
+            if(player == 'c') {
+                // Verifica todos os movimentos possiveis para cada cachorro
+                for(int i = 0; i < TAB_X; i++) {
+                    for(int j = 0; j < TAB_Y; j++) {
+                        if(cur_tab[i][j] == 'c') {
+                            obter_movimentos(false);
+                            for(int c = 0; c < MOVIMENTOS; c++) {
+                                // Atualiza o tabuleiro com um dos possiveis movimentos
+                                cur_tab[temp[c].x][temp[c].y] = cur_tab[i][j];
+                                cur_tab[i][j] = 'n';
+                                // Cria o novo filho, que pode ter mais movimentos
+                                filhos.push_back(Node(cur_tab, x, y, 'o', depth - 1));
+                                // Restaura o tabuleiro para ser reutilizado
+                                cur_tab = tab;
+                            }
+                        }
+                    }
+                }
+            } else {
+                for(int i = 0; i < TAB_X; i++) {
+                    for(int j = 0; j < TAB_Y; j++) {
+                        if(cur_tab[i][j] == 'o') {
+                            obter_movimentos(false);
+                            for(int c = 0; c < MOVIMENTOS; c++) {
+                                // Atualiza o tabuleiro com um dos possiveis movimentos
+                                cur_tab[temp[c].x][temp[c].y] = cur_tab[i][j];
+                                cur_tab[i][j] = 'n';
+                                // Cria o novo filho, que pode ter mais movimentos
+                                filhos.push_back(Node(cur_tab, x, y, 'o', depth - 1));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void calcularHeuristica(char peca, int x, int y) {
+        if(peca == 'c') {
+            heuristica = 8;
+            for(int i = x - 1; i <= x + 1; i++) {
+                for(int j = y - 1; j <= y + 1; j++) {
+                    /* Verifica se o cachorro tem muitas opções de movimentação
+                        e se é ameaçado pela onça
+                    */
+                    if(validar_posicao(x, y, i, j)) {
+                        if(cur_tab[i][j] == 'o' &&
+                           validar_posicao(i + (i-x), j + (j - y)))
+                            heuristica = 0;
+                    }
+                }
+            }
+        } else {
+            for(int i = x - 1; i <= x + 1; i++) {
+                for(int j = y - 1; j <= y + 1; j++) {
+                    /* Verifica se o cachorro tem muitas opções de movimentação
+                        e se é ameaçado pela onça
+                    */
+                    if(validar_posicao(x, y, i, j)) {
+                        if(cur_tab[i][j] == 'n')
+                            heuristica++;
+                        else if(validar_posicao(i + (i-x), j + (j - y)) && cur_tab[i][j] != 'f') {
+                            heuristica = 0;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+public:
+    int getHeuristica() {
+        return heuristica;
+    }
+};
+
+void minimax() {
+
+}
+
 void Teclado( unsigned char tecla, int x, int y){
     bool saida;
     int next_x,
@@ -475,7 +579,7 @@ void Teclado( unsigned char tecla, int x, int y){
     }
     if(tecla == 'h') {
         cursor.holding = !cursor.holding;
-        obter_movimentos();
+        obter_movimentos(true);
     }
 
     glutPostRedisplay();
@@ -515,7 +619,7 @@ void menu() {
 
 int main(int argc, char *argv[]){
 	menu();
-	obter_movimentos();
+	obter_movimentos(true);
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
 	glutInitWindowPosition(100,50);
