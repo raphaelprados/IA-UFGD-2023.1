@@ -39,9 +39,10 @@ typedef struct {
     bool debug_mode;    // false by default
     char player1;
     char player2;
+    int pcs_c;
 } game_data ;
 
-game_data gdt = {'n', 'n', false, 'n', 'n'};
+game_data gdt = {'n', 'n', false, 'n', 'n', 6};
 
 // Legenda: c = cachorro, o = onça, f = posição inválida, n = posição livre
 typedef std::vector<std::vector<char>> Tabuleiro;
@@ -70,6 +71,11 @@ std::map<const char, Positions> temp = movimentos;
 void mover_peca(int x1, int y1, int x2, int y2) {
     tabuleiro[x2][y2] = tabuleiro[x1][y1];
     tabuleiro[x1][y1] = 'n';
+    // Para caso o movimento tenha sido para comer uma peça
+    if(abs(x2 - x1) == 2 || abs(y2 - y1) == 2) {
+        gdt.pcs_c--;
+        tabuleiro[x1 + (x2 - x1)/2][y1 + (y2 - y1)/2] = 'n';
+    }
 }
 
 // Função adaptada do programa demonstrativo 'Worms'
@@ -335,7 +341,7 @@ void obter_movimentos(bool global_position) {
                         int jump_y = j + (j - cursor.y);
                         if(validar_posicao(cursor.x, cursor.y, jump_x, jump_y)
                            && tabuleiro[jump_x][jump_y] == 'n') {
-                            atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), i, j, global_position);
+                            atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), jump_x, jump_y, global_position);
                         }
                     }
                 } else {
@@ -408,7 +414,7 @@ bool mover_cursor(int x1, int y1, int x2, int y2) {
     return true;
 }
 
-bool mover_seletor(int next_x, int next_y) {
+void mover_seletor(int next_x, int next_y) {
     cursor.next_x = next_x;
     cursor.next_y = next_y;
 }
@@ -480,8 +486,8 @@ public:
                 }
             }
         } else {
-            for(int i = x - 1; i <= x + 1; i++) {
-                for(int j = y - 1; j <= y + 1; j++) {
+            for(int i = x - 1; i <= x + 1; i++)
+                for(int j = y - 1; j <= y + 1; j++)
                     /* Verifica se o cachorro tem muitas opções de movimentação
                         e se é ameaçado pela onça
                     */
@@ -493,8 +499,6 @@ public:
                             return;
                         }
                     }
-                }
-            }
         }
     }
 
@@ -509,25 +513,20 @@ void maquina_joga() {
         std::vector<Node> movimentos_base;
         // Maquina controla a onça
         if(gdt.player1 == 'o') {
-            for(int i = 0; i < TAB_X; i++) {
-                for(int j = 0; j < TAB_Y; j++) {
-                    if(tabuleiro[i][j] == 'c') {
-                        obter_movimentos(false);
-                        for(int c = 0; c < MOVIMENTOS; c++) {
-                            if(temp[c].x != -1)
-                                movimentos_base.push_back(Node(tabuleiro, i, j, 'c', gdt.difficulty - 48));
-                        }
-                    }
-                }
-            }
-        // Maquina controla os cachorros
-        } else {
             for(int i = 0; i < TAB_X; i++)
                 for(int j = 0; j < TAB_Y; j++)
-                    if(tabuleiro[i][j] == 'o') {
-                        movimentos_base.push_back(Node(tabuleiro, i, j, 'o', gdt.difficulty - 48));
+                    if(tabuleiro[i][j] == 'c') {
+                        obter_movimentos(false);
+                        for(int c = 0; c < MOVIMENTOS; c++)
+                            if(temp[c].x != -1)
+                                movimentos_base.push_back(Node(tabuleiro, i, j, 'c', gdt.difficulty - 48));
                     }
-        }
+        // Maquina controla os cachorros
+        } else
+            for(int i = 0; i < TAB_X; i++)
+                for(int j = 0; j < TAB_Y; j++)
+                    if(tabuleiro[i][j] == 'o')
+                        movimentos_base.push_back(Node(tabuleiro, i, j, 'o', gdt.difficulty - 48));
     }
 }
 
@@ -536,9 +535,8 @@ Tabuleiro minimax(int cd, Node node, int maxT) {
 }
 
 void Teclado( unsigned char tecla, int x, int y){
-    bool saida;
-    int next_x,
-        next_y;
+    int next_x = -1,
+        next_y = -1;
     switch (tecla){
         case 27 :
         case 'q':
@@ -567,7 +565,7 @@ void Teclado( unsigned char tecla, int x, int y){
             mover_seletor(movimentos[tecla].x, movimentos[tecla].y);
     }
     if(tecla == 'w' || tecla == 'a' || tecla == 's' || tecla == 'd') {
-        saida = mover_cursor(cursor.x, cursor.y, cursor.next_x, cursor.next_y);
+        mover_cursor(cursor.x, cursor.y, cursor.next_x, cursor.next_y);
         if(gdt.debug_mode)
             std::cout << "Mover Cursor: " << mover_cursor(cursor.x, cursor.y, next_x, next_y) << std::endl;
     }
