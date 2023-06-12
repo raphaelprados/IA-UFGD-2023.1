@@ -8,6 +8,7 @@
 // Blibliotecas adicionais
 #include <math.h>
 #include <vector>
+#include <map>
 
 // Variaveis de controle
 #define CIRCLE_POINTS 25
@@ -25,10 +26,11 @@ typedef struct cursor_data {
     int next_x;
     int next_y;
     bool holding;
+    char direction;
 } cursor_data;
 
 // Inicializa a variável
-cursor_data cursor = {2, 2, 'o', 2, 2, false};
+cursor_data cursor = {2, 2, 'o', 2, 2, false, '5'};
 
 // Variável de controle dos parametros do jogo
 typedef struct {
@@ -53,16 +55,17 @@ Tabuleiro tabuleiro = {{'c', 'c', 'c', 'n', 'n', 'f', 'n',},
 typedef struct {
     int x;
     int y;
-    char mapping;
 } Positions;
 
-// Vetor que contem todos os movimentos possiveis
-Positions movimentos[MOVIMENTOS] = {{-1, -1, '7'}, {-1, -1, '8'}, {-1, -1, '9'}, {-1, -1, '4'},
-                                    {-1, -1, '5'}, {-1, -1, '6'}, {-1, -1, '1'}, {-1, -1, '2'},
-                                    {-1, -1, '3'}};
+// Vetor de maps que contem todos os movimentos possiveis
+std::map<const char, Positions> movimentos = {
+    {'7',{-1, -1}}, {'8',{-1, -1}}, {'9',{-1, -1}},
+    {'4',{-1, -1}},                 {'6',{-1, -1}},
+    {'1',{-1, -1}}, {'2',{-1, -1}}, {'3',{-1, -1}}
+};
 
 // Estrutura temporaria para auxiliar a declaração de objetos
-Positions temp = movimentos;
+std::map<const char, Positions> temp = movimentos;
 
 void mover_peca(int x1, int y1, int x2, int y2) {
     tabuleiro[x2][y2] = tabuleiro[x1][y1];
@@ -217,8 +220,8 @@ void desenha_pecas() {
 
 void desenha_cursor() {
     if(cursor.holding) {
-        for(int i = 0; i < MOVIMENTOS; i++) {
-            if(movimentos[i].x != -1)
+        for(int i = '1'; i < MOVIMENTOS + 49; i++) {
+            if(i != '5' && movimentos[i].x != -1)
                 drawCircle(-20.0 + movimentos[i].y*10.0, 20 - movimentos[i].x*10.0, CURSOR_RADIUS,
                             tabuleiro[movimentos[i].x][movimentos[i].y], false,
                             cursor.next_x == movimentos[i].x && cursor.next_y == movimentos[i].y ? true : false );
@@ -249,6 +252,9 @@ bool validar_posicao(int x1, int y1, int x2, int y2) {
         else if(x2 > x1)
             x2 += 1;
     }
+    // Impede movimentos para as posicoes irregulares
+    if((x1 == 1 || x1 == 3) && ((y1 == 4 && y2 > 4 && x2 != 2) || (y1 == 5 && y2 < 5 && x2 != 2)))
+        return false;
     /* Movimentação para posição que não existe */
     if(tabuleiro[x2][y2] == 'f')
         return false;
@@ -300,47 +306,43 @@ bool validar_posicao(int x1, int y1, int x2, int y2) {
     return true;
 }
 
-void obter_movimentos(bool global_position) {
-    int c = 0;
-    for(int i = 0; i < MOVIMENTOS; i++) {
+void atualizar_movimento(int i, int j, int x, int y, bool global_position) {
+    char keys[3][3] = {'7', '8', '9', '4', '5', '6', '1', '2', '3'};
+    if(keys[i][j] != '5') {
         if(global_position)
-            movimentos[i] = {-1, -1, movimentos[c].mapping};
+            movimentos[keys[i][j]] = {x, y};
         else
-            temp[i] = {-1, -1, movimentos[c].mapping};
+            temp[keys[i][j]] = {x, y};
     }
+
+}
+
+void obter_movimentos(bool global_position) {
+    // Iterador para atualizar valores do mapa
+    for(int i = 0; i < 3; i++)
+        for(int j = 0; j < 3; j++)
+            if(i != '5')
+                atualizar_movimento(i, j, -1, -1, global_position);
     for(int i = cursor.x - 1; i <= cursor.x + 1; i++) {
-        for(int j = cursor.y - 1; j <= cursor.y + 1; j++) {
-            if(validar_posicao(cursor.x, cursor.y, i, j)) {
+        for(int j = cursor.y - 1; j <= cursor.y + 1; j++)
+            if(validar_posicao(cursor.x, cursor.y, i, j) ||
+               (cursor.player == 'o' && validar_posicao(i, j, i + (i - cursor.x), j + (j - cursor.y)))) {
                 if(cursor.player == 'o') {
                     if(tabuleiro[i][j] == 'n') {
-                        if(global_position)
-                            movimentos[c] = {i, j, movimentos[c].mapping};
-                        else
-                            temp[c] = {i, j, movimentos[c].mapping};
-                        c++;
+                        atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), i, j, global_position);
                     } else if(tabuleiro[i][j] == 'c') {
                         int jump_x = i + (i - cursor.x);
                         int jump_y = j + (j - cursor.y);
                         if(validar_posicao(cursor.x, cursor.y, jump_x, jump_y)
                            && tabuleiro[jump_x][jump_y] == 'n') {
-                            if(global_position)
-                                movimentos[c] = {i, j, movimentos[c].mapping};
-                            else
-                                temp[c] = {i, j, movimentos[c].mapping};
-                            c++;
+                            atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), i, j, global_position);
                         }
                     }
                 } else {
-                    if(tabuleiro[i][j] == 'n') {
-                        if(global_position)
-                            movimentos[c] = {i, j, movimentos[c].mapping};
-                        else
-                            temp[c] = {i, j, movimentos[c].mapping};
-                        c++;
-                    }
+                    if(tabuleiro[i][j] == 'n')
+                        atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), i, j, global_position);
                 }
             }
-        }
     }
 }
 
@@ -472,7 +474,7 @@ public:
                     */
                     if(validar_posicao(x, y, i, j)) {
                         if(cur_tab[i][j] == 'o' &&
-                           validar_posicao(i + (i-x), j + (j - y)))
+                           validar_posicao(i, j, i + (i-x), j + (j - y)))
                             heuristica = 0;
                     }
                 }
@@ -486,7 +488,7 @@ public:
                     if(validar_posicao(x, y, i, j)) {
                         if(cur_tab[i][j] == 'n')
                             heuristica++;
-                        else if(validar_posicao(i + (i-x), j + (j - y)) && cur_tab[i][j] != 'f') {
+                        else if(validar_posicao(i, j, i + (i-x), j + (j - y)) && cur_tab[i][j] != 'f') {
                             heuristica = 0;
                             return;
                         }
@@ -502,7 +504,34 @@ public:
     }
 };
 
-void minimax() {
+void maquina_joga() {
+    if(gdt.mode == 'm') {
+        std::vector<Node> movimentos_base;
+        // Maquina controla a onça
+        if(gdt.player1 == 'o') {
+            for(int i = 0; i < TAB_X; i++) {
+                for(int j = 0; j < TAB_Y; j++) {
+                    if(tabuleiro[i][j] == 'c') {
+                        obter_movimentos(false);
+                        for(int c = 0; c < MOVIMENTOS; c++) {
+                            if(temp[c].x != -1)
+                                movimentos_base.push_back(Node(tabuleiro, i, j, 'c', gdt.difficulty - 48));
+                        }
+                    }
+                }
+            }
+        // Maquina controla os cachorros
+        } else {
+            for(int i = 0; i < TAB_X; i++)
+                for(int j = 0; j < TAB_Y; j++)
+                    if(tabuleiro[i][j] == 'o') {
+                        movimentos_base.push_back(Node(tabuleiro, i, j, 'o', gdt.difficulty - 48));
+                    }
+        }
+    }
+}
+
+Tabuleiro minimax(int cd, Node node, int maxT) {
 
 }
 
@@ -531,42 +560,11 @@ void Teclado( unsigned char tecla, int x, int y){
             cursor.next_x = cursor.x;
             cursor.next_y = cursor.y + 1;
             break;
-        case '1':
-            next_x = cursor.x + 1;
-            next_y = cursor.y - 1;
-            break;
-        case '2':
-            next_x = cursor.x + 1;
-            next_y = cursor.y;
-            break;
-        case '3':
-            next_x = cursor.x + 1;
-            next_y = cursor.y + 1;
-            break;
-        case '4':
-            next_x = cursor.x;
-            next_y = cursor.y - 1;
-            break;
-        case '6':
-            next_x = cursor.x;
-            next_y = cursor.y + 1;
-            break;
-        case '7':
-            next_x = cursor.x - 1;
-            next_y = cursor.y - 1;
-            break;
-        case '8':
-            next_x = cursor.x - 1;
-            next_y = cursor.y;
-            break;
-        case '9':
-            next_x = cursor.x - 1;
-            next_y = cursor.y + 1;
-            break;
     }
-    if(tecla >= '1' && tecla <= '9' && tecla != '5') {
-        if(validar_posicao(cursor.x, cursor.y, next_x, next_y))
-            mover_seletor(next_x, next_y);
+    if(tecla >= '1' && tecla <= '9' && tecla != '5'
+        && validar_posicao(cursor.x, cursor.y, movimentos[tecla].x, movimentos[tecla].y)) {
+            cursor.direction = tecla;
+            mover_seletor(movimentos[tecla].x, movimentos[tecla].y);
     }
     if(tecla == 'w' || tecla == 'a' || tecla == 's' || tecla == 'd') {
         saida = mover_cursor(cursor.x, cursor.y, cursor.next_x, cursor.next_y);
@@ -576,9 +574,12 @@ void Teclado( unsigned char tecla, int x, int y){
     if(tecla == 'k') {
         mover_peca(cursor.x, cursor.y, cursor.next_x, cursor.next_y);
         atualizar_parametros();
+        // Realiza o movimento da maquina, se ela existir
+        maquina_joga();
     }
     if(tecla == 'h') {
-        cursor.holding = !cursor.holding;
+        if(tabuleiro[cursor.x][cursor.y] == cursor.player)
+            cursor.holding = !cursor.holding;
         obter_movimentos(true);
     }
 
