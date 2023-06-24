@@ -3,12 +3,16 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <iostream>
+#include <windows.h>
+#include <ctime>
 // Bibliotecas gráficas
 #include <GL/glut.h>
 // Blibliotecas adicionais
 #include <math.h>
 #include <vector>
 #include <map>
+// Biblioteca de thread
+#include <thread>
 
 // Variaveis de controle
 #define CIRCLE_POINTS 25
@@ -17,6 +21,12 @@
 #define MOVIMENTOS 9
 #define TAB_X 5
 #define TAB_Y 7
+// Variáveis de
+#define MAX  1000
+#define MIN -1000
+
+//const int N_THREADS = std::thread::hardware_concurrency();
+int N_JOGADAS = 0;
 
 // Armazena os dados do cursor de seleção de peça
 typedef struct cursor_data {
@@ -42,7 +52,7 @@ typedef struct {
     int pcs_c;
 } game_data ;
 
-game_data gdt = {'n', 'n', false, 'n', 'n', 6};
+game_data gdt = {'m', '1', true, 'c', 'o', 6};
 
 // Legenda: c = cachorro, o = onça, f = posição inválida, n = posição livre
 typedef std::vector<std::vector<char>> Tabuleiro;
@@ -52,11 +62,30 @@ Tabuleiro tabuleiro = {{'c', 'c', 'c', 'n', 'n', 'f', 'n',},
                        {'c', 'c', 'c', 'n', 'n', 'n', 'f',},
                        {'c', 'c', 'c', 'n', 'n', 'f', 'n',}};
 
+std::ostream& operator <<(std::ostream &out, const Tabuleiro &tab) {
+    for(int i = 0; i < TAB_X; i++) {
+        for(int j = 0; j < TAB_Y; j++)
+            out << tab[i][j] << " ";
+        out << "\n";
+    }
+    return out;
+}
+
 // Estrutura de controle de possiveis movimentos para cada peca
 typedef struct {
     int x;
     int y;
 } Positions;
+
+typedef struct {
+    float x;
+    float y;
+} FltPositions;
+
+typedef struct {
+    Tabuleiro tab;
+    int heuristica;
+} ResultMinimax;
 
 // Vetor de maps que contem todos os movimentos possiveis
 std::map<const char, Positions> movimentos = {
@@ -67,6 +96,14 @@ std::map<const char, Positions> movimentos = {
 
 // Estrutura temporaria para auxiliar a declaração de objetos
 std::map<const char, Positions> temp = movimentos;
+
+int max(int a, int b) {
+    return (a > b ? a : b);
+}
+
+int min(int a, int b) {
+    return (a < b ? a : b);
+}
 
 void mover_peca(int x1, int y1, int x2, int y2) {
     tabuleiro[x2][y2] = tabuleiro[x1][y1];
@@ -138,7 +175,7 @@ void desenha_tabuleiro() {
     glClear(GL_COLOR_BUFFER_BIT);
     glLoadIdentity();
 
-        // Desenhar as linhas do quadrado, losango e x
+    // Desenhar as linhas do quadrado, losango e x
     glBegin(GL_LINES);
         // Quadrado
         glVertex2f(x1, y1);
@@ -374,6 +411,7 @@ void selecionar_pos() {
 
 void atualizar_parametros() {
     // Passa para o proximo jogador
+    N_JOGADAS++;
     cursor.player = cursor.player == 'o' ? 'c' : 'o';
     cursor.holding = false;
     selecionar_pos();
@@ -427,47 +465,46 @@ private:
     std::vector<Node> filhos;
 public:
     Node(Tabuleiro tab, int x, int y, char player, int depth) {
-        heuristica = 0;
+        //heuristica = 0;
         cur_tab = tab;
-        if(depth == 0)
+        std::vector<Positions> pecas_movem = pecasMovimentam(tab, player);
+        if (depth == 0) {
             calcularHeuristica(player, x, y);
-        // Ultimo nivel de pesquisa alcançado
-        if(depth != 0) {
-            if(player == 'c') {
-                // Verifica todos os movimentos possiveis para cada cachorro
-                for(int i = 0; i < TAB_X; i++) {
-                    for(int j = 0; j < TAB_Y; j++) {
-                        if(cur_tab[i][j] == 'c') {
-                            obter_movimentos(false);
-                            for(int c = 0; c < MOVIMENTOS; c++) {
-                                // Atualiza o tabuleiro com um dos possiveis movimentos
-                                cur_tab[temp[c].x][temp[c].y] = cur_tab[i][j];
-                                cur_tab[i][j] = 'n';
-                                // Cria o novo filho, que pode ter mais movimentos
-                                filhos.push_back(Node(cur_tab, x, y, 'o', depth - 1));
-                                // Restaura o tabuleiro para ser reutilizado
-                                cur_tab = tab;
-                            }
-                        }
+            std::cout << "Node(" << x << "," << y << ") -> (H: " << heuristica << ", D: "
+                        << depth << "]" << std::endl << cur_tab << std::endl;
+        }
+        else {
+            // Verifica todos os movimentos possiveis para cada cachorro
+            for(Positions p : pecas_movem) {
+                //std::cout << "(" << p.x << ", " << p.y << ")" << std::endl;
+                char next_player = player == 'o' ? 'c' : 'o';
+                cur_tab = tab;
+                cursor.x = p.x; cursor.y = p.y;
+                obter_movimentos(false);
+                for(int c = '1'; c <= '9'; c++)
+                    if(c != '5' && temp[c].x != -1) {
+                        cur_tab[p.x][p.y] = 'n';
+                        cur_tab[temp[c].x][temp[c].y] = player;
+                        if(gdt.debug_mode)
+                            std::cout << "Node(" << p.x << "," << p.y << ") -> (" << temp[c].x << ","
+                                        << temp[c].x << ")" << "[" << player << ", D: " << depth << "]" << std::endl
+                                        << cur_tab << std::endl;
+                        filhos.push_back(Node(cur_tab, temp[c].x, temp[c].y, next_player, depth - 1));
                     }
-                }
-            } else {
-                for(int i = 0; i < TAB_X; i++) {
-                    for(int j = 0; j < TAB_Y; j++) {
-                        if(cur_tab[i][j] == 'o') {
-                            obter_movimentos(false);
-                            for(int c = 0; c < MOVIMENTOS; c++) {
-                                // Atualiza o tabuleiro com um dos possiveis movimentos
-                                cur_tab[temp[c].x][temp[c].y] = cur_tab[i][j];
-                                cur_tab[i][j] = 'n';
-                                // Cria o novo filho, que pode ter mais movimentos
-                                filhos.push_back(Node(cur_tab, x, y, 'o', depth - 1));
-                            }
-                        }
-                    }
-                }
             }
         }
+
+        if (cursor.player != player)
+            heuristica *= -1;
+    }
+
+    std::vector<Positions> pecasMovimentam(Tabuleiro tab, char peca) {
+        std::vector<Positions> pecas_movem;
+        for(int i = 0; i < TAB_X; i++)
+            for(int j = 0; j < TAB_Y; j++)
+                if(tab[i][j] == peca)
+                    pecas_movem.push_back({i, j});
+        return pecas_movem;
     }
 
     void calcularHeuristica(char peca, int x, int y) {
@@ -503,35 +540,89 @@ public:
     }
 
 public:
-    int getHeuristica() {
-        return heuristica;
+    int getHeuristica() { return heuristica; }
+
+    Tabuleiro getCurTab() { return cur_tab; }
+
+    int getChildSize() { return filhos.size(); }
+
+    Node getChild(int index) {
+        // Substituir por try/catch
+        if(index >= 0 && index < filhos.size())
+            return filhos[index];
+    }
+
+    void print(Node node, int depth = 0) {
+        std::cout << node.getCurTab() << std::endl;
+        for(int i = 0; i < node.getChildSize(); i++)
+            print(node.getChild(i), depth + 1);
     }
 };
 
-void maquina_joga() {
-    if(gdt.mode == 'm') {
-        std::vector<Node> movimentos_base;
-        // Maquina controla a onça
-        if(gdt.player1 == 'o') {
-            for(int i = 0; i < TAB_X; i++)
-                for(int j = 0; j < TAB_Y; j++)
-                    if(tabuleiro[i][j] == 'c') {
-                        obter_movimentos(false);
-                        for(int c = 0; c < MOVIMENTOS; c++)
-                            if(temp[c].x != -1)
-                                movimentos_base.push_back(Node(tabuleiro, i, j, 'c', gdt.difficulty - 48));
-                    }
-        // Maquina controla os cachorros
-        } else
-            for(int i = 0; i < TAB_X; i++)
-                for(int j = 0; j < TAB_Y; j++)
-                    if(tabuleiro[i][j] == 'o')
-                        movimentos_base.push_back(Node(tabuleiro, i, j, 'o', gdt.difficulty - 48));
+ResultMinimax minimax(int cd, Node node, bool maximizing_player, int alpha, int beta) {
+    ResultMinimax rmmx = {node.getCurTab(), node.getHeuristica()};
+    static bool first_exc = false;
+    static int td;
+    char player;
+    // Seta o total_depth (td) uma única vez, na 1a execucao
+    if(!first_exc) {
+        player = cursor.player;
+        td = cd;
+        first_exc = true;
+    } else {
+        player = (player == 'o' ? 'c' : 'o');
+    }
+
+    if(cd == 0)
+        return rmmx;
+
+    if(maximizing_player) {
+        int best = MIN;
+
+        for(int i = 0; i < node.getChildSize(); i++) {
+            ResultMinimax val = minimax(cd - 1, node.getChild(i), false, alpha, beta);
+            best = max(best, val.heuristica);
+            alpha = max(alpha, best);
+
+            rmmx.heuristica = best;
+
+            if(beta <= alpha) {
+                rmmx.heuristica = node.getChild(i).getHeuristica();
+                break;
+            }
+        }
+        if(cd == td - 1)
+        return rmmx;
+    } else {
+        int best = MAX;
+
+        for(int i = 0; i < node.getChildSize(); i++) {
+            ResultMinimax val = minimax(cd - 1, node.getChild(i), false, alpha, beta);
+            best = min(best, val.heuristica);
+            alpha = min(alpha, best);
+
+            rmmx.heuristica = best;
+
+            if(beta <= alpha) {
+                rmmx.heuristica = node.getChild(i).getHeuristica();
+                break;
+            }
+        }
+        return rmmx;
     }
 }
 
-Tabuleiro minimax(int cd, Node node, int maxT) {
-
+void maquina_joga() {
+    if(gdt.mode == 'm' && cursor.player == gdt.player2) {
+        // clock_t b = clock();
+        Node node(tabuleiro, cursor.x, cursor.y, gdt.player2, 2*(gdt.difficulty - 48));
+        //node.print(node);
+        ResultMinimax rmmx = minimax(3, node, true, MIN, MAX);
+        std::cout << "Filhos: " << node.getChildSize() << std::endl;
+        // clock_t e = clock();
+        tabuleiro = rmmx.tab;
+        atualizar_parametros();
+    }
 }
 
 void Teclado( unsigned char tecla, int x, int y){
@@ -580,6 +671,13 @@ void Teclado( unsigned char tecla, int x, int y){
             cursor.holding = !cursor.holding;
         obter_movimentos(true);
     }
+    if(N_JOGADAS == 0 && tecla == 'b' && gdt.player1 == 'c') {
+        Sleep(1000);
+        int foo = rand() % 3;
+        tabuleiro[1 + foo][3] = tabuleiro[cursor.x][cursor.y];
+        tabuleiro[cursor.x][cursor.y] = 'n';
+        atualizar_parametros();
+    }
 
     glutPostRedisplay();
 }
@@ -604,16 +702,24 @@ void menu() {
                       << "3. Hard" << std::endl
                       << "> ";
             std::cin >> gdt.difficulty;
+            system("cls");
         }
+        while(gdt.player1 == 'n' || (gdt.player1 != 'c' && gdt.player1 != 'C' && gdt.player1 == 'o' && gdt.player1 == 'O')) {
+            std::cout << "[Player 1] Escreva 'c' para jogar como cachorros e 'o' para oncas: ";
+            std::cin >> gdt.player1;
+            system("cls");
+        }
+        gdt.player1 = (gdt.player1 == 'c' || gdt.player1 == 'C') ? 'c' : 'o';
+        gdt.player2 = (gdt.player1 == 'c' || gdt.player1 == 'C') ? 'o' : 'c';
     }
     while(menu_input != 'S' && menu_input != 's' && menu_input != 'n' && menu_input != 'N') {
         std::cout << "Ativar modo debug? (S/N)" << std::endl
-              << "> ";
+                  << "> ";
         std::cin >> menu_input;
+        system("cls");
     }
     if(menu_input == 'S')
         gdt.debug_mode = true;
-    system("cls");
 }
 
 int main(int argc, char *argv[]){
