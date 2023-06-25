@@ -357,36 +357,46 @@ void atualizar_movimento(int i, int j, int x, int y, bool global_position) {
         else
             temp[keys[i][j]] = {x, y};
     }
-
 }
 
-void obter_movimentos(bool global_position) {
+void limpar_movimentos(bool global_position) {
     // Iterador para atualizar valores do mapa
     for(int i = 0; i < 3; i++)
         for(int j = 0; j < 3; j++)
             if(i != '5')
                 atualizar_movimento(i, j, -1, -1, global_position);
+}
+
+int obter_movimentos(char player, bool global_position) {
+    // Contador de movimentos
+    int c = 0;
+    limpar_movimentos(global_position); // Restaura o mapa de movimentos
     for(int i = cursor.x - 1; i <= cursor.x + 1; i++) {
         for(int j = cursor.y - 1; j <= cursor.y + 1; j++)
-            if(validar_posicao(cursor.x, cursor.y, i, j) ||
-               (cursor.player == 'o' && validar_posicao(i, j, i + (i - cursor.x), j + (j - cursor.y)))) {
-                if(cursor.player == 'o') {
+            if(validar_posicao(cursor.x, cursor.y, i, j) || /* Verifica se a movimentação para 'c' é válida */
+               (player == 'o' && validar_posicao(i, j, i + (i - cursor.x), j + (j - cursor.y)))) { /* Verifica se a movimentação para 'o' é válida */
+                if(player == 'o') {
                     if(tabuleiro[i][j] == 'n') {
                         atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), i, j, global_position);
+                        c++;
                     } else if(tabuleiro[i][j] == 'c') {
                         int jump_x = i + (i - cursor.x);
                         int jump_y = j + (j - cursor.y);
                         if(validar_posicao(cursor.x, cursor.y, jump_x, jump_y)
                            && tabuleiro[jump_x][jump_y] == 'n') {
                             atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), jump_x, jump_y, global_position);
+                            c++;
                         }
                     }
-                } else {
-                    if(tabuleiro[i][j] == 'n')
+                } else if(player == 'c') {
+                    if(tabuleiro[i][j] == 'n') {
                         atualizar_movimento(i - (cursor.x - 1), j - (cursor.y - 1), i, j, global_position);
+                        c++;
+                    }
                 }
             }
     }
+    return c;
 }
 
 void selecionar_pos() {
@@ -464,32 +474,44 @@ private:
     int heuristica;
     std::vector<Node> filhos;
 public:
-    Node(Tabuleiro tab, int x, int y, char player, int depth) {
+    Node(Tabuleiro tab, int x, int y, char player, int depth, int cur_depth = INT_MAX) {
+        char foo;
         //heuristica = 0;
+        // Corrige o valor base de cur_depth (é uma gambiarra)
+        if(cur_depth > depth)
+            cur_depth = depth;
         cur_tab = tab;
         std::vector<Positions> pecas_movem = pecasMovimentam(tab, player);
-        if (depth == 0) {
+        if (cur_depth == 0) {
             calcularHeuristica(player, x, y);
+            /*
             std::cout << "Node(" << x << "," << y << ") -> (H: " << heuristica << ", D: "
-                        << depth << "]" << std::endl << cur_tab << std::endl;
-        }
-        else {
+                        << cur_depth << "]" << std::endl << cur_tab << std::endl;
+            */
+        } else {
             // Verifica todos os movimentos possiveis para cada cachorro
             for(Positions p : pecas_movem) {
                 //std::cout << "(" << p.x << ", " << p.y << ")" << std::endl;
+                // Escolhe qual tipo de peca deve ter seus movimentos analisados
+                cur_tab = tab; // Reinicia o tabuleiro para o estado atual
+                cursor.x = p.x; cursor.y = p.y; // Atualiza os valores do cursor para a função obter_movimentos funcionar
+                obter_movimentos(player, false);
                 char next_player = player == 'o' ? 'c' : 'o';
-                cur_tab = tab;
-                cursor.x = p.x; cursor.y = p.y;
-                obter_movimentos(false);
+                if(gdt.debug_mode) {
+                    std::cout << "Movimentos obtidos para (" << p.x << "," << p.y << ", " << cur_tab[p.x][p.y] << ")" << std::endl;
+                    for(char c = '1'; c <= '9'; c == '4' ? c+=2 : c++)
+                        std::cout << "(" << c << "|" << temp[c].x << "," << temp[c].y << ")";
+                    std::cout << std::endl;
+                    std::cout << cur_tab << std::endl;
+                    system("pause");
+                    system("cls");
+                }
                 for(int c = '1'; c <= '9'; c++)
                     if(c != '5' && temp[c].x != -1) {
+                        // Atualiza as posicoes das peças
                         cur_tab[p.x][p.y] = 'n';
                         cur_tab[temp[c].x][temp[c].y] = player;
-                        if(gdt.debug_mode)
-                            std::cout << "Node(" << p.x << "," << p.y << ") -> (" << temp[c].x << ","
-                                        << temp[c].x << ")" << "[" << player << ", D: " << depth << "]" << std::endl
-                                        << cur_tab << std::endl;
-                        filhos.push_back(Node(cur_tab, temp[c].x, temp[c].y, next_player, depth - 1));
+                        filhos.push_back(Node(cur_tab, temp[c].x, temp[c].y, next_player, depth, cur_depth - 1));
                     }
             }
         }
@@ -502,8 +524,12 @@ public:
         std::vector<Positions> pecas_movem;
         for(int i = 0; i < TAB_X; i++)
             for(int j = 0; j < TAB_Y; j++)
-                if(tab[i][j] == peca)
-                    pecas_movem.push_back({i, j});
+                if(tab[i][j] == peca) {
+                    cursor.x = i;
+                    cursor.y = j;
+                    if(obter_movimentos(peca, false))
+                        pecas_movem.push_back({i, j});
+                }
         return pecas_movem;
     }
 
@@ -615,6 +641,7 @@ ResultMinimax minimax(int cd, Node node, bool maximizing_player, int alpha, int 
 void maquina_joga() {
     if(gdt.mode == 'm' && cursor.player == gdt.player2) {
         // clock_t b = clock();
+        system("cls");
         Node node(tabuleiro, cursor.x, cursor.y, gdt.player2, 2*(gdt.difficulty - 48));
         //node.print(node);
         ResultMinimax rmmx = minimax(3, node, true, MIN, MAX);
@@ -669,7 +696,7 @@ void Teclado( unsigned char tecla, int x, int y){
     if(tecla == 'h') {
         if(tabuleiro[cursor.x][cursor.y] == cursor.player)
             cursor.holding = !cursor.holding;
-        obter_movimentos(true);
+        obter_movimentos(cursor.player, true);
     }
     if(N_JOGADAS == 0 && tecla == 'b' && gdt.player1 == 'c') {
         Sleep(1000);
@@ -724,7 +751,7 @@ void menu() {
 
 int main(int argc, char *argv[]){
 	menu();
-	obter_movimentos(true);
+	obter_movimentos(cursor.player, true);
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
 	glutInitWindowPosition(100,50);
