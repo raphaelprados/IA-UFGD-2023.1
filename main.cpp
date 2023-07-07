@@ -503,16 +503,19 @@ public:
                         std::cout << "(" << c << "|" << temp[c].x << "," << temp[c].y << ")";
                     std::cout << std::endl;
                     std::cout << cur_tab << std::endl;
-                    system("pause");
-                    system("cls");
                 }
                 for(int c = '1'; c <= '9'; c++)
-                    if(c != '5' && temp[c].x != -1) {
+                    if(c != '5' && (temp[c].x != -1 || temp[c].y != -1)) {
                         // Atualiza as posicoes das peças
+                        std::cout << "O[" << p.x <<"][" << p.y << "] = " << cur_tab[p.x][p.y] <<
+                                     " to N[" << temp[c].x << "][" << temp[c].y << "] = " <<
+                                     cur_tab[temp[c].x][temp[c].y] << std::endl;
                         cur_tab[p.x][p.y] = 'n';
                         cur_tab[temp[c].x][temp[c].y] = player;
                         filhos.push_back(Node(cur_tab, temp[c].x, temp[c].y, next_player, depth, cur_depth - 1));
+                        cur_tab = tab;
                     }
+                std::cout << "-----------------------------------------------------------------------------------)" << std::endl;
             }
         }
 
