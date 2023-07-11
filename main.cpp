@@ -471,7 +471,7 @@ void mover_seletor(int next_x, int next_y) {
 class Node{
 private:
     Tabuleiro cur_tab;
-    int heuristica;
+    int heuristica = 0;
     std::vector<Node> filhos;
 public:
     Node(Tabuleiro tab, int x, int y, char player, int depth, int cur_depth = INT_MAX) {
@@ -483,6 +483,7 @@ public:
         cur_tab = tab;
         std::vector<Positions> pecas_movem = pecasMovimentam(tab, player);
         if (cur_depth == 0) {
+            std::cout << "ok" << std::endl;
             calcularHeuristica(player, x, y);
             /*
             std::cout << "Node(" << x << "," << y << ") -> (H: " << heuristica << ", D: "
@@ -498,7 +499,7 @@ public:
                 obter_movimentos(player, false);
                 char next_player = player == 'o' ? 'c' : 'o';
                 if(gdt.debug_mode) {
-                    std::cout << "Movimentos obtidos para (" << p.x << "," << p.y << ", " << cur_tab[p.x][p.y] << ")" << std::endl;
+                    std::cout << "Movimentos obtidos para (" << p.x << "," << p.y << ", " << cur_tab[p.x][p.y] << ")" << ", com h(x): " << heuristica << std::endl;
                     for(char c = '1'; c <= '9'; c == '4' ? c+=2 : c++)
                         std::cout << "(" << c << "|" << temp[c].x << "," << temp[c].y << ")";
                     std::cout << std::endl;
@@ -547,7 +548,7 @@ public:
                     if(validar_posicao(x, y, i, j)) {
                         if(cur_tab[i][j] == 'o' &&
                            validar_posicao(i, j, i + (i-x), j + (j - y)))
-                            heuristica = 0;
+                            heuristica -= 8 + (int)pow((14 - gdt.pcs_c), 2);
                     }
                 }
             }
@@ -561,11 +562,13 @@ public:
                         if(cur_tab[i][j] == 'n')
                             heuristica++;
                         else if(validar_posicao(i, j, i + (i-x), j + (j - y)) && cur_tab[i][j] != 'f') {
-                            heuristica = 0;
-                            return;
+                            heuristica += (int)pow((14 - gdt.pcs_c), 2);
+                        } else {
+                            heuristica -= 2;
                         }
                     }
         }
+        std::cout << "h(x) para (" << x << "," << y << ") = " << heuristica << std::endl;
     }
 
 public:
@@ -589,7 +592,7 @@ public:
 };
 
 ResultMinimax minimax(int cd, Node node, bool maximizing_player, int alpha, int beta) {
-    ResultMinimax rmmx = {node.getCurTab(), node.getHeuristica()};
+    ResultMinimax rmmx;
     static bool first_exc = false;
     static int td;
     char player;
@@ -602,8 +605,10 @@ ResultMinimax minimax(int cd, Node node, bool maximizing_player, int alpha, int 
         player = (player == 'o' ? 'c' : 'o');
     }
 
-    if(cd == 0)
+    if (cd == 0) {
+        rmmx = {node.getCurTab(), node.getHeuristica()};
         return rmmx;
+    }
 
     if(maximizing_player) {
         int best = MIN;
@@ -616,7 +621,7 @@ ResultMinimax minimax(int cd, Node node, bool maximizing_player, int alpha, int 
             rmmx.heuristica = best;
 
             if(beta <= alpha) {
-                rmmx.heuristica = node.getChild(i).getHeuristica();
+                rmmx = {node.getChild(i).getCurTab(), node.getChild(i).getHeuristica()};
                 break;
             }
         }
@@ -633,7 +638,7 @@ ResultMinimax minimax(int cd, Node node, bool maximizing_player, int alpha, int 
             rmmx.heuristica = best;
 
             if(beta <= alpha) {
-                rmmx.heuristica = node.getChild(i).getHeuristica();
+                rmmx = {node.getChild(i).getCurTab(), node.getChild(i).getHeuristica()};
                 break;
             }
         }
@@ -648,7 +653,9 @@ void maquina_joga() {
         Node node(tabuleiro, cursor.x, cursor.y, gdt.player2, 2*(gdt.difficulty - 48));
         //node.print(node);
         ResultMinimax rmmx = minimax(3, node, true, MIN, MAX);
-        std::cout << "Filhos: " << node.getChildSize() << std::endl;
+        std::cout << "-----------------------------------------"
+                  << "\nResultado: " << rmmx.heuristica << std::endl;
+        std::cout << rmmx.tab << std::endl;
         // clock_t e = clock();
         tabuleiro = rmmx.tab;
         atualizar_parametros();
