@@ -52,7 +52,7 @@ typedef struct {
     int pcs_c;
 } game_data ;
 
-game_data gdt = {'m', '1', true, 'c', 'o', 6};
+game_data gdt = {'n', 'n', false, 'n', 'n', 6};
 
 // Legenda: c = cachorro, o = onça, f = posição inválida, n = posição livre
 typedef std::vector<std::vector<char>> Tabuleiro;
@@ -539,7 +539,7 @@ public:
 
     void calcularHeuristica(char peca, int x, int y) {
         if(peca == 'c') {
-            heuristica = 8;
+            std::cout << "CACHORRO" << std::endl;
             for(int i = x - 1; i <= x + 1; i++) {
                 for(int j = y - 1; j <= y + 1; j++) {
                     /* Verifica se o cachorro tem muitas opções de movimentação
@@ -548,7 +548,7 @@ public:
                     if(validar_posicao(x, y, i, j)) {
                         if(cur_tab[i][j] == 'o' &&
                            validar_posicao(i, j, i + (i-x), j + (j - y)))
-                            heuristica -= 8 + (int)pow((14 - gdt.pcs_c), 2);
+                            heuristica += (int)pow((6 - gdt.pcs_c), 2);
                     }
                 }
             }
@@ -562,13 +562,17 @@ public:
                         if(cur_tab[i][j] == 'n')
                             heuristica++;
                         else if(validar_posicao(i, j, i + (i-x), j + (j - y)) && cur_tab[i][j] != 'f') {
-                            heuristica += (int)pow((14 - gdt.pcs_c), 2);
+                            heuristica += 1000 + (int)pow((14 - gdt.pcs_c), 2);
+                            std::cout << "COMEU" << std::endl;
                         } else {
-                            heuristica -= 2;
+                            heuristica += 2;
                         }
                     }
         }
         std::cout << "h(x) para (" << x << "," << y << ") = " << heuristica << std::endl;
+        // Altera a heuristica para refletir quem está jogando
+        if(gdt.player1 != peca)
+            heuristica *= -1;
     }
 
 public:
